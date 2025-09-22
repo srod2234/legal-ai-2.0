@@ -1,0 +1,15 @@
+RESTART SUCCESS TEST DOCUMENT
+
+This document tests that the document upload pipeline is working correctly after restarting all services with the complete fix.
+
+The fixes include:
+1. ChromaDB version compatibility fixed (0.5.23)
+2. CORS origins updated for port 8081
+3. Graceful degradation in vector service
+4. Proper error handling in document service
+5. Clean restart of all services
+
+STATUS: Testing after clean restart
+EXPECTED: Document should reach READY status and appear in frontend
+
+End of restart test document.

@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database only
+  postgres:
+    image: postgres:15-alpine
+    container_name: legal-ai-postgres-simple
+    environment:
+      POSTGRES_DB: legal_ai_db
+      POSTGRES_USER: legal_ai_user
+      POSTGRES_PASSWORD: dev_password
+    volumes:
+      - postgres_simple_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - legal-ai-simple-network
+
+  # Redis for Caching
+  redis:
+    image: redis:7-alpine
+    container_name: legal-ai-redis-simple
+    command: redis-server --requirepass dev_redis_password
+    volumes:
+      - redis_simple_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - legal-ai-simple-network
+
+volumes:
+  postgres_simple_data:
+    driver: local
+  redis_simple_data:
+    driver: local
+
+networks:
+  legal-ai-simple-network:
+    driver: bridge

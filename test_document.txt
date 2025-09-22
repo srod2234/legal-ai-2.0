@@ -1,0 +1,15 @@
+Legal Contract Test Document
+
+This is a test legal document for testing the document upload functionality of the Legal AI application.
+
+TERMS AND CONDITIONS
+
+1. This document serves as a test case for the document processing pipeline.
+2. It contains sample legal text to verify text extraction and classification.
+3. The system should process this document and make it searchable.
+
+CONFIDENTIALITY CLAUSE
+
+All information contained in this document is for testing purposes only and does not constitute actual legal advice or binding agreements.
+
+END OF DOCUMENT

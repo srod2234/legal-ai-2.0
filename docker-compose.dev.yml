@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: legal-ai-postgres-dev
+    environment:
+      POSTGRES_DB: legal_ai_db
+      POSTGRES_USER: legal_ai_user
+      POSTGRES_PASSWORD: dev_password
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - legal-ai-dev-network
+
+  # ChromaDB Vector Database
+  chromadb:
+    image: chromadb/chroma:0.5.23
+    container_name: legal-ai-chromadb-dev
+    environment:
+      - CHROMA_SERVER_HOST=0.0.0.0
+      - CHROMA_SERVER_HTTP_PORT=8000
+      - IS_PERSISTENT=TRUE
+    volumes:
+      - chromadb_dev_data:/chroma/chroma
+    ports:
+      - "8001:8000"
+    networks:
+      - legal-ai-dev-network
+
+  # Redis for Caching
+  redis:
+    image: redis:7-alpine
+    container_name: legal-ai-redis-dev
+    command: redis-server --requirepass dev_redis_password
+    volumes:
+      - redis_dev_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - legal-ai-dev-network
+
+volumes:
+  postgres_dev_data:
+    driver: local
+  chromadb_dev_data:
+    driver: local
+  redis_dev_data:
+    driver: local
+
+networks:
+  legal-ai-dev-network:
+    driver: bridge
