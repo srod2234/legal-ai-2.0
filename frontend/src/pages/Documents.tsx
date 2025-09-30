@@ -1,79 +1,268 @@
-import { useState, useRef } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
-  Upload,
-  Search,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
   FileText,
-  Calendar,
-  Eye,
-  Trash2,
+  Search,
+  MoreHorizontal,
   Download,
-  Grid3X3,
-  List,
-  Filter
-} from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { useDocuments } from "@/hooks/useDocuments";
-import { apiService } from "@/services/api";
+  Trash2,
+  RefreshCw,
+  Filter,
+  AlertCircle,
+  Clock,
+  CheckCircle,
+  XCircle,
+  FileX,
+  Eye,
+  BarChart3,
+  Calendar,
+  Users,
+  Database,
+  Upload,
+} from 'lucide-react';
+import { apiService, Document } from '@/services/api';
+import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
 
-// Remove local Document interface - we use the one from API service
+interface DocumentsProps {
+  className?: string;
+}
 
-const Documents = () => {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+type ProcessingStatusFilter = 'all' | 'processing' | 'ready' | 'failed' | 'deleted';
+type DocumentTypeFilter = 'all' | 'contract' | 'legal_brief' | 'court_filing' | 'memo' | 'research' | 'other';
+
+const Documents: React.FC<DocumentsProps> = ({ className }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<ProcessingStatusFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<DocumentTypeFilter>('all');
+  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [showOverview, setShowOverview] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { toast } = useToast();
 
-  // Use documents hook for real data
-  const { documents, isLoading, uploadDocument, deleteDocument, isUploading, isDeleting } = useDocuments();
+  const { isAdmin, user, isLoading: authLoading } = useAuth();
+
+  // Manual document loading to avoid React Query issues
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const loadDocuments = async () => {
+    if (!user) return;
+
+    try {
+      setIsLoading(true);
+      const data = await apiService.getDocuments();
+      setDocuments(data);
+    } catch (error) {
+      console.error('Failed to load documents:', error);
+      toast.error('Failed to load documents');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load documents when user is available
+  React.useEffect(() => {
+    if (user && !authLoading) {
+      loadDocuments();
+    }
+  }, [user?.id, authLoading]);
+
+  // Manual refetch function
+  const refetch = loadDocuments;
+
+  // Get document statistics
+  const documentStats = useMemo(() => {
+    const stats = {
+      total: documents.length,
+      processing: documents.filter(d => ['processing', 'ocr_processing', 'embedding'].includes(d.processing_status)).length,
+      ready: documents.filter(d => d.processing_status === 'ready').length,
+      failed: documents.filter(d => d.processing_status === 'failed').length,
+      totalSize: documents.reduce((sum, d) => sum + d.file_size, 0),
+      avgProcessingTime: 0, // Would calculate from processing times
+      uniqueUsers: isAdmin ? new Set(documents.map(d => d.user_id)).size : 1,
+      recentUploads: documents.filter(d => {
+        const uploadDate = new Date(d.created_at);
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        return uploadDate > yesterday;
+      }).length,
+    };
+    return stats;
+  }, [documents, isAdmin]);
+
+  // Filter documents
+  const filteredDocuments = useMemo(() => {
+    return documents.filter((doc) => {
+      const matchesSearch =
+        doc.filename.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        doc.original_filename.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        doc.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        doc.description?.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesStatus = statusFilter === 'all' || doc.processing_status === statusFilter;
+
+      const matchesType = typeFilter === 'all' || doc.document_type === typeFilter;
+
+      return matchesSearch && matchesStatus && matchesType;
+    });
+  }, [documents, searchTerm, statusFilter, typeFilter]);
+
+  // Delete document function
+  const deleteDocument = async (documentId: number) => {
+    try {
+      await apiService.deleteDocument(documentId);
+      loadDocuments(); // Manual refresh
+      toast.success('Document deleted successfully');
+    } catch (error: any) {
+      toast.error(`Failed to delete document: ${error.message}`);
+    }
+  };
+
+  // Upload document functionality
+  const uploadDocument = async (data: { file: File; metadata: any }) => {
+    try {
+      await apiService.uploadDocument(data.file, data.metadata);
+      loadDocuments(); // Manual refresh
+      toast.success('Document uploaded successfully');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error: any) {
+      toast.error(`Failed to upload document: ${error.message}`);
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'ready':
+        return <CheckCircle className="w-4 h-4 text-green-600" />;
+      case 'processing':
+      case 'ocr_processing':
+      case 'embedding':
+        return <Clock className="w-4 h-4 text-blue-600 animate-pulse" />;
+      case 'failed':
+        return <XCircle className="w-4 h-4 text-red-600" />;
+      case 'deleted':
+        return <FileX className="w-4 h-4 text-gray-600" />;
+      default:
+        return <AlertCircle className="w-4 h-4 text-yellow-600" />;
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'ready':
-        return <Badge className="bg-green-100 text-green-800">Ready</Badge>;
+        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Ready</Badge>;
       case 'processing':
+        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Processing</Badge>;
       case 'ocr_processing':
+        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">OCR Processing</Badge>;
       case 'embedding':
-        return <Badge className="bg-yellow-100 text-yellow-800">Processing</Badge>;
-      case 'uploading':
-      case 'uploaded':
-        return <Badge className="bg-blue-100 text-blue-800">Uploading</Badge>;
+        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Embedding</Badge>;
       case 'failed':
-        return <Badge variant="destructive">Failed</Badge>;
+        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Failed</Badge>;
       case 'deleted':
-        return <Badge variant="secondary">Deleted</Badge>;
+        return <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-100">Deleted</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
+  const getTypeBadge = (type?: string) => {
+    if (!type) return <Badge variant="outline">Unknown</Badge>;
+
+    const typeLabels: Record<string, string> = {
+      contract: 'Contract',
+      legal_brief: 'Legal Brief',
+      court_filing: 'Court Filing',
+      memo: 'Memo',
+      research: 'Research',
+      other: 'Other',
+    };
+
+    return <Badge variant="outline">{typeLabels[type] || type}</Badge>;
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
       month: 'short',
       day: 'numeric',
-      year: 'numeric'
+      hour: '2-digit',
+      minute: '2-digit',
     });
   };
 
-  const formatTimeAgo = (dateString: string) => {
-    const now = new Date();
-    const date = new Date(dateString);
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-
-    if (diffInHours < 1) return "Just now";
-    if (diffInHours < 24) return `${diffInHours}h ago`;
-    return `${Math.floor(diffInHours / 24)}d ago`;
+  const handleDeleteDocument = (documentId: number) => {
+    deleteDocument(documentId);
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  const handleDownloadDocument = async (document: Document) => {
+    try {
+      const blob = await apiService.downloadDocument(document.id);
+      const url = window.URL.createObjectURL(blob);
+      const a = window.document.createElement('a');
+      a.href = url;
+      a.download = document.original_filename;
+      window.document.body.appendChild(a);
+      a.click();
+      window.document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success('Document downloaded successfully');
+    } catch (error) {
+      toast.error('Failed to download document');
+    }
   };
 
   const handleUpload = () => {
@@ -84,342 +273,355 @@ const Documents = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    try {
-      await uploadDocument({
-        file: file,
-        metadata: {
-          title: file.name,
-          description: `Uploaded from document library: ${file.name}`,
-          is_confidential: true,
-        }
-      });
-    } catch (error) {
-      console.error('Upload error:', error);
-      // Error handling is done in the useDocuments hook
-    }
-
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const handleDelete = async (documentId: number) => {
-    if (window.confirm('Are you sure you want to delete this document?')) {
-      try {
-        await deleteDocument(documentId);
-      } catch (error) {
-        console.error('Delete error:', error);
-        // Error handling is done in the useDocuments hook
+    uploadDocument({
+      file: file,
+      metadata: {
+        title: file.name,
+        description: `Uploaded from document library: ${file.name}`,
+        is_confidential: true,
       }
-    }
+    });
   };
 
-  const handleView = async (documentId: number) => {
-    try {
-      const content = await apiService.getDocumentContent(documentId);
-
-      // Create a modal or new window to display content
-      const newWindow = window.open('', '_blank', 'width=800,height=600,scrollbars=yes');
-      if (newWindow) {
-        newWindow.document.write(`
-          <html>
-            <head>
-              <title>Document Content</title>
-              <style>
-                body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; }
-                .header { border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 20px; }
-                .content { white-space: pre-wrap; }
-                .stats { margin-top: 20px; padding-top: 10px; border-top: 1px solid #ccc; color: #666; }
-              </style>
-            </head>
-            <body>
-              <div class="header">
-                <h2>Document Content</h2>
-                <p><strong>Document ID:</strong> ${content.document_id}</p>
-              </div>
-              <div class="content">${content.content || 'No content available'}</div>
-              <div class="stats">
-                <p><strong>Word Count:</strong> ${content.word_count || 'N/A'}</p>
-                <p><strong>Language:</strong> ${content.language || 'N/A'}</p>
-                <p><strong>OCR Used:</strong> ${content.has_ocr ? 'Yes' : 'No'}</p>
-              </div>
-            </body>
-          </html>
-        `);
-        newWindow.document.close();
-      }
-    } catch (error) {
-      console.error('View error:', error);
-      toast({
-        title: 'View Failed',
-        description: 'Failed to load document content',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleDownload = async (documentId: number, originalFilename: string) => {
-    try {
-      const blob = await apiService.downloadDocument(documentId);
-
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = originalFilename;
-      document.body.appendChild(link);
-      link.click();
-
-      // Cleanup
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      toast({
-        title: 'Success',
-        description: 'Document downloaded successfully',
-      });
-    } catch (error) {
-      console.error('Download error:', error);
-      toast({
-        title: 'Download Failed',
-        description: 'Failed to download document',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const filteredDocuments = documents.filter(doc =>
-    (doc.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    doc.filename.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  if (isLoading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="flex items-center space-x-2">
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-          <span>Loading documents...</span>
-        </div>
-      </div>
-    );
-  }
+  // Get recent documents for quick overview
+  const recentDocuments = documents
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 5);
 
   return (
-    <div className="h-full flex flex-col bg-background">
-      {/* Header */}
-      <div className="border-b border-border bg-card-elevated/50 p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Document Library</h1>
-              <p className="text-muted-foreground mt-1">
-                Manage and analyze your legal documents
-              </p>
-            </div>
+    <div className="h-full overflow-auto">
+      <div className={`p-6 max-w-[1600px] mx-auto space-y-6 ${className || ''}`}>
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold">Document Management</h2>
+            <p className="text-muted-foreground">
+              {isAdmin ? 'Monitor and manage all system documents' : 'Manage your legal documents'}
+            </p>
+          </div>
+          <div className="flex space-x-2">
+            <Button
+              onClick={() => setShowOverview(!showOverview)}
+              variant="outline"
+              size="sm"
+            >
+              <BarChart3 className="w-4 h-4 mr-2" />
+              {showOverview ? 'Hide Overview' : 'Show Overview'}
+            </Button>
             <Button
               onClick={handleUpload}
               className="gradient-primary hover:shadow-gold transition-spring"
-              disabled={isUploading}
             >
               <Upload className="w-4 h-4 mr-2" />
-              {isUploading ? 'Uploading...' : 'Upload Document'}
+              Upload Document
             </Button>
-          </div>
-
-          {/* Search and Filters */}
-          <div className="flex items-center space-x-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search documents..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 transition-smooth focus:ring-2 focus:ring-primary/20 focus:border-input-focus"
-              />
-            </div>
-            
-            <Button variant="outline" size="icon">
-              <Filter className="w-4 h-4" />
+            <Button onClick={() => refetch()} variant="outline" size="sm" disabled={isLoading}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
             </Button>
-
-            <div className="flex border border-border rounded-lg">
-              <Button
-                variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                size="icon"
-                onClick={() => setViewMode('grid')}
-                className="rounded-r-none"
-              >
-                <Grid3X3 className="w-4 h-4" />
-              </Button>
-              <Button
-                variant={viewMode === 'list' ? 'default' : 'ghost'}
-                size="icon"
-                onClick={() => setViewMode('list')}
-                className="rounded-l-none"
-              >
-                <List className="w-4 h-4" />
-              </Button>
-            </div>
           </div>
         </div>
-      </div>
 
-      {/* Documents Grid/List */}
-      <div className="flex-1 overflow-auto p-6">
-        <div className="max-w-7xl mx-auto">
-          {viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredDocuments.map((document) => (
-                <Card key={document.id} className="shadow-elegant hover:shadow-gold transition-spring">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <FileText className="w-8 h-8 text-primary" />
-                      {getStatusBadge(document.processing_status)}
-                    </div>
-                    <CardTitle className="text-lg line-clamp-2">{document.title || document.filename}</CardTitle>
-                    <CardDescription className="flex items-center space-x-4 text-sm">
-                      <span>{document.document_type || 'Document'}</span>
-                      <span>•</span>
-                      <span>{formatFileSize(document.file_size)}</span>
-                    </CardDescription>
+        {/* Statistics Cards - Collapsible */}
+        {showOverview && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Documents</CardTitle>
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{documentStats.total}</div>
+                  <p className="text-xs text-muted-foreground">
+                    {formatFileSize(documentStats.totalSize)} total size
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Processing</CardTitle>
+                  <Clock className="h-4 w-4 text-blue-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-blue-600">{documentStats.processing}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Documents being processed
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Ready</CardTitle>
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-green-600">{documentStats.ready}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Successfully processed
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Recent Uploads</CardTitle>
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{documentStats.recentUploads}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Uploaded in last 24 hours
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Additional Metrics */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {isAdmin && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <Users className="w-5 h-5" />
+                      <span>User Activity</span>
+                    </CardTitle>
                   </CardHeader>
-
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <p className="text-muted-foreground">Uploaded</p>
-                        <p className="font-medium">{formatDate(document.created_at)}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Status</p>
-                        <p className="font-medium">{document.processing_status}</p>
-                      </div>
-                    </div>
-
-                    <div className="text-sm">
-                      <p className="text-muted-foreground">File Name</p>
-                      <p className="font-medium text-sm text-muted-foreground truncate">{document.filename}</p>
-                    </div>
-
-                    <div className="flex space-x-2 pt-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        disabled={document.processing_status !== 'ready'}
-                        onClick={() => handleView(document.id)}
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        View
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => handleDownload(document.id, document.original_filename)}
-                      >
-                        <Download className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(document.id)}
-                        disabled={isDeleting}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{documentStats.uniqueUsers}</div>
+                    <p className="text-sm text-muted-foreground">Active users with documents</p>
                   </CardContent>
                 </Card>
-              ))}
+              )}
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Database className="w-5 h-5" />
+                    <span>Storage Usage</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{formatFileSize(documentStats.totalSize)}</div>
+                  <p className="text-sm text-muted-foreground">Total storage consumed</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <BarChart3 className="w-5 h-5" />
+                    <span>Success Rate</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {documentStats.total > 0
+                      ? Math.round((documentStats.ready / documentStats.total) * 100)
+                      : 0}%
+                  </div>
+                  <p className="text-sm text-muted-foreground">Processing success rate</p>
+                </CardContent>
+              </Card>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {filteredDocuments.map((document) => (
-                <Card key={document.id} className="shadow-elegant hover:shadow-gold transition-spring">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <FileText className="w-8 h-8 text-primary" />
-                        <div>
-                          <h3 className="font-semibold text-lg">{document.title || document.filename}</h3>
-                          <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                            <span>{document.document_type || 'Document'}</span>
-                            <span>•</span>
-                            <span>{formatFileSize(document.file_size)}</span>
-                            <span>•</span>
-                            <span>Uploaded {formatDate(document.created_at)}</span>
+          </>
+        )}
+
+        {/* Filters and Search */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Filter className="w-5 h-5" />
+              <span>Document List</span>
+            </CardTitle>
+            <CardDescription>Search and filter documents by status and type</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center space-x-4 mb-6">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Input
+                  placeholder="Search documents..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select value={statusFilter} onValueChange={(value: ProcessingStatusFilter) => setStatusFilter(value)}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="ready">Ready</SelectItem>
+                  <SelectItem value="processing">Processing</SelectItem>
+                  <SelectItem value="failed">Failed</SelectItem>
+                  <SelectItem value="deleted">Deleted</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={typeFilter} onValueChange={(value: DocumentTypeFilter) => setTypeFilter(value)}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="contract">Contract</SelectItem>
+                  <SelectItem value="legal_brief">Legal Brief</SelectItem>
+                  <SelectItem value="court_filing">Court Filing</SelectItem>
+                  <SelectItem value="memo">Memo</SelectItem>
+                  <SelectItem value="research">Research</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Documents Table */}
+            <div className="border rounded-lg">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Document</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Size</TableHead>
+                    {isAdmin && <TableHead>User ID</TableHead>}
+                    <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={isAdmin ? 7 : 6} className="text-center py-8">
+                        <div className="flex items-center justify-center space-x-2">
+                          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                          <span>Loading documents...</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredDocuments.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={isAdmin ? 7 : 6} className="text-center py-8 text-muted-foreground">
+                        {searchTerm || statusFilter !== 'all' || typeFilter !== 'all'
+                          ? 'No documents match your filters'
+                          : 'No documents found'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredDocuments.map((document) => (
+                      <TableRow key={document.id}>
+                        <TableCell>
+                          <div className="flex items-start space-x-2">
+                            {getStatusIcon(document.processing_status)}
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium truncate">
+                                {document.title || document.original_filename}
+                              </div>
+                              <div className="text-sm text-muted-foreground truncate">
+                                {document.filename}
+                              </div>
+                              {document.processing_error && (
+                                <div className="text-xs text-red-600 truncate">
+                                  Error: {document.processing_error}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-6">
-                        <div className="text-center">
-                          <p className="text-sm text-muted-foreground">File Name</p>
-                          <p className="font-medium text-sm truncate max-w-32">{document.filename}</p>
-                        </div>
-
-                        <div className="text-center">
-                          <p className="text-sm text-muted-foreground">Status</p>
-                          {getStatusBadge(document.processing_status)}
-                        </div>
-
-                        <div className="flex space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={document.processing_status !== 'ready'}
-                            onClick={() => handleView(document.id)}
-                          >
-                            <Eye className="w-4 h-4 mr-1" />
-                            View
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => handleDownload(document.id, document.original_filename)}
-                          >
-                            <Download className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => handleDelete(document.id)}
-                            disabled={isDeleting}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                        </TableCell>
+                        <TableCell>{getStatusBadge(document.processing_status)}</TableCell>
+                        <TableCell>{getTypeBadge(document.document_type)}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {formatFileSize(document.file_size)}
+                        </TableCell>
+                        {isAdmin && (
+                          <TableCell className="text-muted-foreground">
+                            {document.user_id}
+                          </TableCell>
+                        )}
+                        <TableCell className="text-muted-foreground">
+                          {formatDate(document.created_at)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0">
+                                <span className="sr-only">Open menu</span>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                              <DropdownMenuItem
+                                onClick={() => handleDownloadDocument(document)}
+                                disabled={document.processing_status !== 'ready'}
+                              >
+                                <Download className="mr-2 h-4 w-4" />
+                                Download
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Document</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete "{document.original_filename}"?
+                                      This action cannot be undone and will remove all associated data.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDeleteDocument(document.id)}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </div>
-          )}
 
-          {filteredDocuments.length === 0 && (
-            <div className="text-center py-12">
-              <FileText className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-foreground mb-2">No documents found</h3>
-              <p className="text-muted-foreground">
-                {searchQuery ? "Try adjusting your search terms." : "Upload your first document to get started."}
-              </p>
-            </div>
-          )}
-        </div>
+            {/* Results Summary */}
+            {filteredDocuments.length > 0 && (
+              <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+                <div>
+                  Showing {filteredDocuments.length} of {documents.length} documents
+                </div>
+                <div className="flex items-center space-x-4">
+                  <span>{filteredDocuments.filter(d => d.processing_status === 'ready').length} ready</span>
+                  <span>{filteredDocuments.filter(d => d.processing_status === 'failed').length} failed</span>
+                  <span>{filteredDocuments.filter(d => ['processing', 'ocr_processing', 'embedding'].includes(d.processing_status)).length} processing</span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          onChange={handleFileChange}
+          accept=".pdf,.doc,.docx,.txt"
+          style={{ display: 'none' }}
+        />
       </div>
-
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        onChange={handleFileChange}
-        accept=".pdf,.doc,.docx,.txt"
-        style={{ display: 'none' }}
-      />
     </div>
   );
 };

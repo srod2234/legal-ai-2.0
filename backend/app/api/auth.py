@@ -104,18 +104,18 @@ async def logout(
 ):
     """User logout endpoint."""
     try:
-        # Clear authentication cookies
+        # Clear authentication cookies with same parameters as when they were set
         response.delete_cookie(
             key="access_token",
             httponly=True,
             secure=False,
-            samesite="none" if settings.debug else "lax"
+            samesite="lax"  # Must match the samesite used in login
         )
         response.delete_cookie(
             key="refresh_token",
             httponly=True,
             secure=False,
-            samesite="none" if settings.debug else "lax"
+            samesite="lax"  # Must match the samesite used in login
         )
         
         logger.info(f"User logged out: {current_user.email}")

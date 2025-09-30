@@ -79,10 +79,16 @@ const UserManagement: React.FC<UserManagementProps> = ({ className }) => {
   const queryClient = useQueryClient();
 
   // Fetch users
-  const { data: users = [], isLoading, refetch } = useQuery({
+  const { data: users = [], isLoading, refetch, error } = useQuery({
     queryKey: ['users'],
     queryFn: apiService.getUsers,
   });
+
+  // Debug logging (can be removed if no longer needed)
+  // console.log('UserManagement - Loading:', isLoading);
+  // console.log('UserManagement - Error:', error);
+  // console.log('UserManagement - Users data:', users);
+  // console.log('UserManagement - Users length:', users?.length || 0);
 
   // Filter users based on search and filters
   const filteredUsers = useMemo(() => {

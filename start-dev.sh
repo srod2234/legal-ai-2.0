@@ -37,7 +37,7 @@ check_docker() {
 
 # Check if ports are available
 check_ports() {
-    local ports=(3000 8000 5432 8001 6379)
+    local ports=(5173 8000 5432 8001 6379)
     local occupied_ports=()
     
     for port in "${ports[@]}"; do
@@ -110,19 +110,13 @@ setup_backend() {
     
     # Activate virtual environment and install dependencies
     source venv/bin/activate
-    
+
     # Upgrade pip
     pip install --upgrade pip
-    
-    # Install poetry if not installed
-    if ! command -v poetry &> /dev/null; then
-        log "Installing Poetry..."
-        pip install poetry
-    fi
-    
-    # Install dependencies with poetry
+
+    # Install dependencies with pip
     log "Installing backend dependencies..."
-    poetry install
+    pip install -r requirements.txt
     
     success "Backend dependencies installed."
     cd ..
@@ -205,13 +199,13 @@ start_frontend() {
     FRONTEND_PID=$!
     echo $FRONTEND_PID > ../frontend.pid
     
-    success "Frontend server starting on http://localhost:3000"
+    success "Frontend server starting on http://localhost:5173"
     cd ..
-    
+
     # Wait for frontend to be ready
     sleep 15
-    
-    if curl -f http://localhost:3000 > /dev/null 2>&1; then
+
+    if curl -f http://localhost:5173 > /dev/null 2>&1; then
         success "Frontend server is running."
     else
         warning "Frontend server may not be fully ready yet."
@@ -225,7 +219,7 @@ show_info() {
 ${GREEN}🎉 Legal AI Application is now running locally! 🎉${NC}
 
 ${BLUE}📱 Application URLs:${NC}
-  🌐 Frontend: http://localhost:3000
+  🌐 Frontend: http://localhost:5173
   🔧 Backend API: http://localhost:8000
   📚 API Documentation: http://localhost:8000/docs
   📊 ChromaDB: http://localhost:8001
@@ -242,7 +236,7 @@ ${BLUE}⚡ Quick Commands:${NC}
   🧹 Clean up: docker-compose -f docker-compose.dev.yml down -v
 
 ${BLUE}👤 Getting Started:${NC}
-  1. Open http://localhost:3000 in your browser
+  1. Open http://localhost:5173 in your browser
   2. The application will start with a clean database
   3. You can create a new user account or use the admin interface
   4. Upload some test documents and try the AI chat features
@@ -308,7 +302,7 @@ EOF
         if ! curl -f http://localhost:8000/health > /dev/null 2>&1; then
             warning "Backend service appears to be down."
         fi
-        if ! curl -f http://localhost:3000 > /dev/null 2>&1; then
+        if ! curl -f http://localhost:5173 > /dev/null 2>&1; then
             warning "Frontend service appears to be down."
         fi
     done

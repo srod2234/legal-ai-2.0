@@ -5,17 +5,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   LayoutDashboard,
   Users,
-  FileText,
   Shield,
-  MessageSquare,
   Server,
+  FileText,
 } from "lucide-react";
 import UserManagement from "@/components/UserManagement";
 import DashboardOverview from "@/components/admin/DashboardOverview";
-import DocumentManagement from "@/components/admin/DocumentManagement";
 import SecurityAuditManagement from "@/components/admin/SecurityAuditManagement";
-import ChatAIAnalytics from "@/components/admin/ChatAIAnalytics";
 import SystemMonitoring from "@/components/admin/SystemMonitoring";
+import DocumentManagement from "@/components/admin/DocumentManagement";
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -68,7 +66,7 @@ const Admin = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="dashboard" className="flex items-center space-x-2">
               <LayoutDashboard className="w-4 h-4" />
               <span className="hidden sm:inline">Overview</span>
@@ -84,10 +82,6 @@ const Admin = () => {
             <TabsTrigger value="security" className="flex items-center space-x-2">
               <Shield className="w-4 h-4" />
               <span className="hidden sm:inline">Security</span>
-            </TabsTrigger>
-            <TabsTrigger value="chat" className="flex items-center space-x-2">
-              <MessageSquare className="w-4 h-4" />
-              <span className="hidden sm:inline">AI & Chat</span>
             </TabsTrigger>
             <TabsTrigger value="system" className="flex items-center space-x-2">
               <Server className="w-4 h-4" />
@@ -111,9 +105,6 @@ const Admin = () => {
             <SecurityAuditManagement />
           </TabsContent>
 
-          <TabsContent value="chat" className="space-y-6">
-            <ChatAIAnalytics />
-          </TabsContent>
 
           <TabsContent value="system" className="space-y-6">
             <SystemMonitoring />

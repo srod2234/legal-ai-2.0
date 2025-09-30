@@ -1,5 +1,4 @@
-import React, { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Table,
   TableBody,
@@ -74,18 +73,30 @@ type ProcessingStatusFilter = 'all' | 'processing' | 'ready' | 'failed' | 'delet
 type DocumentTypeFilter = 'all' | 'contract' | 'legal_brief' | 'court_filing' | 'memo' | 'research' | 'other';
 
 const DocumentManagement: React.FC<DocumentManagementProps> = ({ className }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<ProcessingStatusFilter>('all');
-  const [typeFilter, setTypeFilter] = useState<DocumentTypeFilter>('all');
-  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  // Manual document loading for admin overview
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const queryClient = useQueryClient();
+  const loadDocuments = async () => {
+    try {
+      setIsLoading(true);
+      const data = await apiService.getAdminDocuments();
+      setDocuments(data);
+    } catch (error) {
+      console.error('Failed to load documents:', error);
+      toast.error('Failed to load documents. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  // Fetch documents
-  const { data: documents = [], isLoading, refetch } = useQuery({
-    queryKey: ['admin-documents'],
-    queryFn: apiService.getDocuments,
-  });
+  // Load documents on mount
+  useEffect(() => {
+    loadDocuments();
+  }, []);
+
+  // Manual refetch function
+  const refetch = loadDocuments;
 
   // Get document statistics
   const documentStats = useMemo(() => {
@@ -97,89 +108,15 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ className }) =>
       totalSize: documents.reduce((sum, d) => sum + d.file_size, 0),
       avgProcessingTime: 0, // Would calculate from processing times
       uniqueUsers: new Set(documents.map(d => d.user_id)).size,
+      recentUploads: documents.filter(d => {
+        const uploadDate = new Date(d.created_at);
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        return uploadDate > yesterday;
+      }).length,
     };
     return stats;
   }, [documents]);
-
-  // Filter documents
-  const filteredDocuments = useMemo(() => {
-    return documents.filter((doc) => {
-      const matchesSearch =
-        doc.filename.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        doc.original_filename.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        doc.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        doc.description?.toLowerCase().includes(searchTerm.toLowerCase());
-
-      const matchesStatus = statusFilter === 'all' || doc.processing_status === statusFilter;
-
-      const matchesType = typeFilter === 'all' || doc.document_type === typeFilter;
-
-      return matchesSearch && matchesStatus && matchesType;
-    });
-  }, [documents, searchTerm, statusFilter, typeFilter]);
-
-  // Delete document mutation
-  const deleteDocumentMutation = useMutation({
-    mutationFn: apiService.deleteDocument,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-documents'] });
-      toast.success('Document deleted successfully');
-    },
-    onError: (error) => {
-      toast.error(`Failed to delete document: ${error.message}`);
-    },
-  });
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'ready':
-        return <CheckCircle className="w-4 h-4 text-green-600" />;
-      case 'processing':
-      case 'ocr_processing':
-      case 'embedding':
-        return <Clock className="w-4 h-4 text-blue-600 animate-pulse" />;
-      case 'failed':
-        return <XCircle className="w-4 h-4 text-red-600" />;
-      case 'deleted':
-        return <FileX className="w-4 h-4 text-gray-600" />;
-      default:
-        return <AlertCircle className="w-4 h-4 text-yellow-600" />;
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'ready':
-        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Ready</Badge>;
-      case 'processing':
-        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Processing</Badge>;
-      case 'ocr_processing':
-        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">OCR Processing</Badge>;
-      case 'embedding':
-        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Embedding</Badge>;
-      case 'failed':
-        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Failed</Badge>;
-      case 'deleted':
-        return <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-100">Deleted</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
-    }
-  };
-
-  const getTypeBadge = (type?: string) => {
-    if (!type) return <Badge variant="outline">Unknown</Badge>;
-
-    const typeLabels: Record<string, string> = {
-      contract: 'Contract',
-      legal_brief: 'Legal Brief',
-      court_filing: 'Court Filing',
-      memo: 'Memo',
-      research: 'Research',
-      other: 'Other',
-    };
-
-    return <Badge variant="outline">{typeLabels[type] || type}</Badge>;
-  };
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 B';
@@ -189,9 +126,41 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ className }) =>
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  if (isLoading) {
+    return (
+      <div className={`space-y-6 ${className}`}>
+        <div className="flex items-center justify-center py-12">
+          <div className="flex items-center space-x-2">
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+            <span>Loading document overview...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Get recent documents for quick overview
+  const recentDocuments = documents
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 5);
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'ready':
+        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Ready</Badge>;
+      case 'processing':
+      case 'ocr_processing':
+      case 'embedding':
+        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Processing</Badge>;
+      case 'failed':
+        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Failed</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
@@ -199,35 +168,14 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ className }) =>
     });
   };
 
-  const handleDeleteDocument = (documentId: number) => {
-    deleteDocumentMutation.mutate(documentId);
-  };
-
-  const handleDownloadDocument = async (document: Document) => {
-    try {
-      const blob = await apiService.downloadDocument(document.id);
-      const url = window.URL.createObjectURL(blob);
-      const a = window.document.createElement('a');
-      a.href = url;
-      a.download = document.original_filename;
-      window.document.body.appendChild(a);
-      a.click();
-      window.document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-      toast.success('Document downloaded successfully');
-    } catch (error) {
-      toast.error('Failed to download document');
-    }
-  };
-
   return (
     <div className={`space-y-6 ${className}`}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Document Management</h2>
+          <h2 className="text-2xl font-bold">Document Overview</h2>
           <p className="text-muted-foreground">
-            Monitor and manage document processing and storage
+            System-wide document statistics and recent activity
           </p>
         </div>
         <Button onClick={() => refetch()} variant="outline" size="sm" disabled={isLoading}>
@@ -279,19 +227,19 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ className }) =>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Failed</CardTitle>
-            <XCircle className="h-4 w-4 text-red-600" />
+            <CardTitle className="text-sm font-medium">Recent Uploads</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{documentStats.failed}</div>
+            <div className="text-2xl font-bold">{documentStats.recentUploads}</div>
             <p className="text-xs text-muted-foreground">
-              Processing failures
+              Uploaded in last 24 hours
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Additional Metrics */}
+      {/* Quick Stats Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card>
           <CardHeader>
@@ -337,185 +285,61 @@ const DocumentManagement: React.FC<DocumentManagementProps> = ({ className }) =>
         </Card>
       </div>
 
-      {/* Filters and Search */}
+      {/* Recent Documents */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Filter className="w-5 h-5" />
-            <span>Document List</span>
+          <CardTitle className="flex items-center justify-between">
+            <span>Recent Documents</span>
+            <Button variant="outline" size="sm">
+              <FileText className="w-4 h-4 mr-2" />
+              View All Documents
+            </Button>
           </CardTitle>
-          <CardDescription>Search and filter documents by status and type</CardDescription>
+          <CardDescription>Latest documents uploaded to the system</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center space-x-4 mb-6">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-              <Input
-                placeholder="Search documents..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+          {recentDocuments.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No documents found
             </div>
-            <Select value={statusFilter} onValueChange={(value: ProcessingStatusFilter) => setStatusFilter(value)}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="ready">Ready</SelectItem>
-                <SelectItem value="processing">Processing</SelectItem>
-                <SelectItem value="failed">Failed</SelectItem>
-                <SelectItem value="deleted">Deleted</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={typeFilter} onValueChange={(value: DocumentTypeFilter) => setTypeFilter(value)}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="contract">Contract</SelectItem>
-                <SelectItem value="legal_brief">Legal Brief</SelectItem>
-                <SelectItem value="court_filing">Court Filing</SelectItem>
-                <SelectItem value="memo">Memo</SelectItem>
-                <SelectItem value="research">Research</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Documents Table */}
-          <div className="border rounded-lg">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Document</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>User ID</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
-                      <div className="flex items-center justify-center space-x-2">
-                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                        <span>Loading documents...</span>
+          ) : (
+            <div className="space-y-4">
+              {recentDocuments.map((document) => (
+                <div key={document.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <FileText className="w-8 h-8 text-primary" />
+                    <div>
+                      <div className="font-medium">
+                        {document.title || document.original_filename}
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ) : filteredDocuments.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      {searchTerm || statusFilter !== 'all' || typeFilter !== 'all'
-                        ? 'No documents match your filters'
-                        : 'No documents found'}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredDocuments.map((document) => (
-                    <TableRow key={document.id}>
-                      <TableCell>
-                        <div className="flex items-start space-x-2">
-                          {getStatusIcon(document.processing_status)}
-                          <div className="min-w-0 flex-1">
-                            <div className="font-medium truncate">
-                              {document.title || document.original_filename}
-                            </div>
-                            <div className="text-sm text-muted-foreground truncate">
-                              {document.filename}
-                            </div>
-                            {document.processing_error && (
-                              <div className="text-xs text-red-600 truncate">
-                                Error: {document.processing_error}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>{getStatusBadge(document.processing_status)}</TableCell>
-                      <TableCell>{getTypeBadge(document.document_type)}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatFileSize(document.file_size)}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {document.user_id}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatDate(document.created_at)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                              <span className="sr-only">Open menu</span>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem
-                              onClick={() => handleDownloadDocument(document)}
-                              disabled={document.processing_status !== 'ready'}
-                            >
-                              <Download className="mr-2 h-4 w-4" />
-                              Download
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Document</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete "{document.original_filename}"?
-                                    This action cannot be undone and will remove all associated data.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDeleteDocument(document.id)}
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
-          {/* Results Summary */}
-          {filteredDocuments.length > 0 && (
-            <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
-              <div>
-                Showing {filteredDocuments.length} of {documents.length} documents
-              </div>
-              <div className="flex items-center space-x-4">
-                <span>{filteredDocuments.filter(d => d.processing_status === 'ready').length} ready</span>
-                <span>{filteredDocuments.filter(d => d.processing_status === 'failed').length} failed</span>
-                <span>{filteredDocuments.filter(d => ['processing', 'ocr_processing', 'embedding'].includes(d.processing_status)).length} processing</span>
-              </div>
+                      <div className="text-sm text-muted-foreground">
+                        User {document.user_id} • {formatDate(document.created_at)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {getStatusBadge(document.processing_status)}
+                    <span className="text-sm text-muted-foreground">
+                      {formatFileSize(document.file_size)}
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Action Reminder */}
+      <Card className="border-blue-200 bg-blue-50">
+        <CardContent className="p-6">
+          <div className="flex items-center space-x-2 text-blue-800">
+            <FileText className="w-5 h-5" />
+            <span className="font-medium">Need full document management?</span>
+          </div>
+          <p className="text-sm text-blue-700 mt-1">
+            Visit the main Documents page for complete document management features, including upload, search, filtering, and detailed actions.
+          </p>
         </CardContent>
       </Card>
     </div>

@@ -132,32 +132,42 @@ export interface ChatSession {
 }
 
 // Analytics interfaces
+export interface AICostMetrics {
+  total_cost_today: number;
+  total_cost_this_month: number;
+  cost_per_message: number;
+  cost_per_user: number;
+  tokens_used_today: number;
+  tokens_used_this_month: number;
+  cost_trend_percent: number;
+}
+
 export interface SystemStats {
+  // Core business metrics
   total_users: number;
   active_users: number;
   new_users_today: number;
-  new_users_this_week: number;
-  new_users_this_month: number;
+  user_engagement_score: number;
+
+  // Document metrics
   total_documents: number;
   documents_processed_today: number;
-  documents_processing: number;
-  documents_failed: number;
-  total_file_size_gb: number;
+  document_processing_success_rate: number;
+  avg_documents_per_user: number;
+
+  // Chat & AI metrics
   total_chat_sessions: number;
-  active_chat_sessions: number;
   messages_today: number;
-  messages_this_week: number;
-  total_tokens_used: number;
-  estimated_cost_today: number;
-  estimated_cost_total: number;
-  uptime_hours: number;
-  cpu_usage_percent?: number;
-  memory_usage_percent?: number;
-  disk_usage_percent?: number;
-  login_attempts_today: number;
+  ai_cost_metrics: AICostMetrics;
+
+  // System performance summary
+  system_uptime_hours: number;
+  overall_system_status: string;
+
+  // Security summary
+  security_risk_level: string;
   failed_logins_today: number;
   active_sessions: number;
-  suspicious_activities: number;
 }
 
 export interface SystemHealth {
@@ -223,13 +233,21 @@ export interface SecuritySummary {
 }
 
 export interface PerformanceMetrics {
+  // Core performance (user-facing)
   avg_response_time_ms: number;
   total_requests_24h: number;
   error_rate_percent: number;
   document_processing_avg_time: number;
+  document_processing_success_rate: number;
   chat_response_avg_time: number;
+
+  // Technical details (for expandable section)
   database_query_avg_time: number;
   vector_search_avg_time: number;
+  cache_hit_rate_percent: number;
+
+  // Overall system performance indicator
+  system_performance_status: string;
 }
 
 export interface AdminDashboardData {
@@ -239,6 +257,16 @@ export interface AdminDashboardData {
   performance_metrics: PerformanceMetrics;
   recent_activities: UserActivity[];
   recent_alerts: Record<string, any>[];
+  user_activity_trends: Array<{
+    date: string;
+    users: number;
+    newUsers: number;
+  }>;
+  document_type_distribution: Array<{
+    name: string;
+    value: number;
+    color: string;
+  }>;
 }
 
 class ApiService {
@@ -417,6 +445,10 @@ class ApiService {
     return response.documents;
   }
 
+  async getAdminDocuments(): Promise<Document[]> {
+    return this.request<Document[]>('/api/admin/documents');
+  }
+
   async deleteDocument(documentId: number): Promise<void> {
     return this.request(`/api/documents/${documentId}`, {
       method: 'DELETE',
@@ -529,7 +561,7 @@ class ApiService {
     return this.request('/api/admin/stats');
   }
 
-  async getUsers(): Promise<User[]> {
+  getUsers = async (): Promise<User[]> => {
     return this.request<User[]>('/api/admin/users/list');
   }
 
@@ -553,21 +585,20 @@ class ApiService {
   }
 
   async deactivateUser(userId: number): Promise<User> {
-    return this.request<User>(`/api/auth/users/${userId}/deactivate`, {
+    return this.request<User>(`/api/admin/users/${userId}/deactivate`, {
       method: 'PUT',
     });
   }
 
   async activateUser(userId: number): Promise<User> {
-    return this.request<User>(`/api/auth/users/${userId}/activate`, {
+    return this.request<User>(`/api/admin/users/${userId}/activate`, {
       method: 'PUT',
     });
   }
 
   async updateUserRole(userId: number, role: 'admin' | 'standard'): Promise<User> {
-    return this.request<User>(`/api/auth/users/${userId}/role`, {
+    return this.request<User>(`/api/admin/users/${userId}/role/${role}`, {
       method: 'PUT',
-      body: JSON.stringify({ role }),
     });
   }
 

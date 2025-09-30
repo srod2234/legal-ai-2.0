@@ -178,42 +178,44 @@ class AuditLogListResponse(BaseModel):
     has_prev: bool
 
 
+class AICostMetrics(BaseModel):
+    """Schema for AI cost tracking."""
+    total_cost_today: float
+    total_cost_this_month: float
+    cost_per_message: float
+    cost_per_user: float
+    tokens_used_today: int
+    tokens_used_this_month: int
+    cost_trend_percent: float  # percentage change from last period
+
+
 class SystemStats(BaseModel):
     """Schema for system statistics."""
-    # User stats
+    # Core business metrics
     total_users: int
     active_users: int
     new_users_today: int
-    new_users_this_week: int
-    new_users_this_month: int
-    
-    # Document stats
+    user_engagement_score: float  # average sessions per user
+
+    # Document metrics
     total_documents: int
     documents_processed_today: int
-    documents_processing: int
-    documents_failed: int
-    total_file_size_gb: float
-    
-    # Chat stats
+    document_processing_success_rate: float
+    avg_documents_per_user: float
+
+    # Chat & AI metrics
     total_chat_sessions: int
-    active_chat_sessions: int
     messages_today: int
-    messages_this_week: int
-    total_tokens_used: int
-    estimated_cost_today: float
-    estimated_cost_total: float
-    
-    # System stats
-    uptime_hours: float
-    cpu_usage_percent: Optional[float] = None
-    memory_usage_percent: Optional[float] = None
-    disk_usage_percent: Optional[float] = None
-    
-    # Security stats
-    login_attempts_today: int
+    ai_cost_metrics: AICostMetrics
+
+    # System performance summary
+    system_uptime_hours: float
+    overall_system_status: str  # "healthy", "degraded", "unhealthy"
+
+    # Security summary
+    security_risk_level: str  # "low", "medium", "high"
     failed_logins_today: int
     active_sessions: int
-    suspicious_activities: int
 
 
 class UserActivity(BaseModel):
@@ -250,13 +252,21 @@ class SecuritySummary(BaseModel):
 
 class PerformanceMetrics(BaseModel):
     """Schema for performance metrics."""
+    # Core performance (user-facing)
     avg_response_time_ms: float
     total_requests_24h: int
     error_rate_percent: float
     document_processing_avg_time: float
+    document_processing_success_rate: float
     chat_response_avg_time: float
+
+    # Technical details (for expandable section)
     database_query_avg_time: float
     vector_search_avg_time: float
+    cache_hit_rate_percent: float
+
+    # Overall system performance indicator
+    system_performance_status: str  # "good", "fair", "poor"
 
 
 class UsageAnalytics(BaseModel):
@@ -277,6 +287,8 @@ class AdminDashboardData(BaseModel):
     performance_metrics: PerformanceMetrics
     recent_activities: List[UserActivity]
     recent_alerts: List[Dict[str, Any]]
+    user_activity_trends: List[Dict[str, Any]]
+    document_type_distribution: List[Dict[str, Any]]
 
 
 class SystemConfigUpdate(BaseModel):

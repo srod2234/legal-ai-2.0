@@ -18,6 +18,9 @@ const queryClient = new QueryClient({
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
+      staleTime: 5 * 60 * 1000, // 5 minutes - data stays fresh
+      cacheTime: 10 * 60 * 1000, // 10 minutes - keep in cache when unused
+      refetchOnMount: false, // Don't refetch if data is still fresh
     },
   },
 });
@@ -44,6 +47,41 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <AppLayout>{children}</AppLayout>;
 };
 
+// Admin-only Route wrapper
+const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const { isAuthenticated, isAdmin, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex items-center space-x-2">
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+          <span>Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!isAdmin) {
+    return (
+      <AppLayout>
+        <div className="h-full flex items-center justify-center">
+          <div className="text-center">
+            <h2 className="text-xl font-semibold text-red-600">Access Denied</h2>
+            <p className="text-muted-foreground">You do not have admin privileges.</p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  return <AppLayout>{children}</AppLayout>;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -63,14 +101,14 @@ const App = () => (
             </ProtectedRoute>
           } />
           <Route path="/admin" element={
-            <ProtectedRoute>
+            <AdminRoute>
               <Admin />
-            </ProtectedRoute>
+            </AdminRoute>
           } />
           <Route path="/admin/analytics" element={
-            <ProtectedRoute>
+            <AdminRoute>
               <Analytics />
-            </ProtectedRoute>
+            </AdminRoute>
           } />
           <Route path="/profile" element={
             <ProtectedRoute>

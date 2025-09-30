@@ -622,7 +622,6 @@ const ChatInterface = () => {
 
           <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
             <div className="flex items-center space-x-4">
-              <span>Press Enter to send, Shift+Enter for new line</span>
               {!isConnected && (
                 <span className="text-red-500">• Disconnected</span>
               )}

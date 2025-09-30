@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { apiService, AdminDashboardData } from "@/services/api";
+import ChatAIAnalytics from "@/components/admin/ChatAIAnalytics";
 import {
   LineChart,
   Line,
@@ -54,30 +55,12 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-// Mock data for charts - in a real app, this would come from the API
-const mockChartData = {
-  userTrends: [
-    { date: "2024-01-01", users: 45, newUsers: 5 },
-    { date: "2024-01-02", users: 52, newUsers: 7 },
-    { date: "2024-01-03", users: 48, newUsers: 3 },
-    { date: "2024-01-04", users: 61, newUsers: 13 },
-    { date: "2024-01-05", users: 55, newUsers: 8 },
-    { date: "2024-01-06", users: 67, newUsers: 12 },
-    { date: "2024-01-07", users: 73, newUsers: 6 },
-  ],
-  documentUsage: [
-    { name: "PDF", value: 45, color: "#8884d8" },
-    { name: "DOCX", value: 30, color: "#82ca9d" },
-    { name: "TXT", value: 15, color: "#ffc658" },
-    { name: "Other", value: 10, color: "#ff7300" },
-  ],
-  performanceData: [
-    { metric: "API Response", value: 150, target: 200 },
-    { metric: "Document Processing", value: 30, target: 45 },
-    { metric: "Chat Response", value: 800, target: 1000 },
-    { metric: "Vector Search", value: 200, target: 300 },
-  ],
+// Helper function to format dates for display
+const formatChartDate = (dateString: string) => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
+
 
 interface MetricCardProps {
   title: string;
@@ -288,12 +271,12 @@ const Analytics = () => {
           </div>
         ) : (
           <>
-            {/* Key Metrics Overview */}
+            {/* Key Metrics Overview - Streamlined */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <MetricCard
-                title="Total Users"
-                value={stats?.total_users || 0}
-                description={`${stats?.active_users || 0} active users`}
+                title="Users"
+                value={`${stats?.total_users || 0} (${stats?.active_users || 0} active)`}
+                description={`${stats?.user_engagement_score || 0} avg sessions/user`}
                 icon={<Users className="w-8 h-8" />}
                 trend={{
                   value: stats?.new_users_today || 0,
@@ -303,35 +286,39 @@ const Analytics = () => {
               <MetricCard
                 title="Documents"
                 value={stats?.total_documents || 0}
-                description={`${stats?.documents_processed_today || 0} processed today`}
+                description={`${stats?.document_processing_success_rate || 100}% success rate`}
                 icon={<FileText className="w-8 h-8" />}
                 status={
-                  (stats?.documents_failed || 0) > 0 ? "warning" : "success"
+                  (stats?.document_processing_success_rate || 100) < 90 ? "warning" : "success"
                 }
               />
               <MetricCard
-                title="Chat Sessions"
-                value={stats?.total_chat_sessions || 0}
-                description={`${stats?.messages_today || 0} messages today`}
-                icon={<MessageSquare className="w-8 h-8" />}
+                title="AI Costs"
+                value={`$${stats?.ai_cost_metrics?.total_cost_this_month?.toFixed(2) || 0}`}
+                description={`$${stats?.ai_cost_metrics?.total_cost_today?.toFixed(2) || 0} today`}
+                icon={<TrendingUp className="w-8 h-8" />}
+                trend={{
+                  value: Math.abs(stats?.ai_cost_metrics?.cost_trend_percent || 0),
+                  isPositive: (stats?.ai_cost_metrics?.cost_trend_percent || 0) >= 0
+                }}
               />
               <MetricCard
-                title="System Health"
-                value={health?.status || "Unknown"}
-                description={`${Object.keys(health?.components || {}).length} components`}
+                title="Performance"
+                value={performance?.system_performance_status || "Good"}
+                description={`${performance?.avg_response_time_ms?.toFixed(0) || 0}ms avg response`}
                 icon={
-                  health?.status === "healthy" ? (
+                  performance?.system_performance_status === "good" ? (
                     <CheckCircle className="w-8 h-8" />
-                  ) : health?.status === "degraded" ? (
+                  ) : performance?.system_performance_status === "fair" ? (
                     <AlertTriangle className="w-8 h-8" />
                   ) : (
                     <XCircle className="w-8 h-8" />
                   )
                 }
                 status={
-                  health?.status === "healthy"
+                  performance?.system_performance_status === "good"
                     ? "success"
-                    : health?.status === "degraded"
+                    : performance?.system_performance_status === "fair"
                     ? "warning"
                     : "error"
                 }
@@ -340,11 +327,10 @@ const Analytics = () => {
 
             {/* Detailed Analytics Tabs */}
             <Tabs defaultValue="overview" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="performance">Performance</TabsTrigger>
-                <TabsTrigger value="security">Security</TabsTrigger>
-                <TabsTrigger value="usage">Usage</TabsTrigger>
+                <TabsTrigger value="usage">Usage & Documents</TabsTrigger>
+                <TabsTrigger value="chat">Chat & AI</TabsTrigger>
               </TabsList>
 
               <TabsContent value="overview" className="space-y-6">
@@ -359,11 +345,26 @@ const Analytics = () => {
                     </CardHeader>
                     <CardContent>
                       <ResponsiveContainer width="100%" height={300}>
-                        <AreaChart data={mockChartData.userTrends}>
+                        <AreaChart data={dashboardData?.user_activity_trends?.map(item => ({
+                          ...item,
+                          displayDate: formatChartDate(item.date)
+                        })) || []}>
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="date" />
+                          <XAxis dataKey="displayDate" />
                           <YAxis />
-                          <Tooltip />
+                          <Tooltip
+                            labelFormatter={(label, payload) => {
+                              if (payload && payload[0]) {
+                                return new Date(payload[0].payload.date).toLocaleDateString('en-US', {
+                                  weekday: 'short',
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric'
+                                });
+                              }
+                              return label;
+                            }}
+                          />
                           <Legend />
                           <Area
                             type="monotone"
@@ -400,7 +401,7 @@ const Analytics = () => {
                       <ResponsiveContainer width="100%" height={300}>
                         <PieChart>
                           <Pie
-                            data={mockChartData.documentUsage}
+                            data={dashboardData?.document_type_distribution || []}
                             cx="50%"
                             cy="50%"
                             outerRadius={80}
@@ -410,11 +411,13 @@ const Analytics = () => {
                               `${name} ${(percent * 100).toFixed(0)}%`
                             }
                           >
-                            {mockChartData.documentUsage.map((entry, index) => (
+                            {(dashboardData?.document_type_distribution || []).map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />
                             ))}
                           </Pie>
-                          <Tooltip />
+                          <Tooltip
+                            formatter={(value) => [`${value} documents`, 'Count']}
+                          />
                         </PieChart>
                       </ResponsiveContainer>
                     </CardContent>
@@ -469,184 +472,7 @@ const Analytics = () => {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="performance" className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Performance Metrics */}
-                  <Card className="shadow-elegant">
-                    <CardHeader>
-                      <CardTitle>Response Times</CardTitle>
-                      <CardDescription>
-                        Average response times across system components
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={mockChartData.performanceData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="metric" />
-                          <YAxis />
-                          <Tooltip />
-                          <Legend />
-                          <Bar dataKey="value" fill="#8884d8" name="Current (ms)" />
-                          <Bar dataKey="target" fill="#82ca9d" name="Target (ms)" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
 
-                  {/* System Resource Usage */}
-                  <Card className="shadow-elegant">
-                    <CardHeader>
-                      <CardTitle>System Resources</CardTitle>
-                      <CardDescription>Current system resource utilization</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div>
-                        <div className="flex justify-between text-sm mb-2">
-                          <span>CPU Usage</span>
-                          <span>{stats?.cpu_usage_percent || 0}%</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-primary h-2 rounded-full"
-                            style={{ width: `${stats?.cpu_usage_percent || 0}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-sm mb-2">
-                          <span>Memory Usage</span>
-                          <span>{stats?.memory_usage_percent || 0}%</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-primary h-2 rounded-full"
-                            style={{ width: `${stats?.memory_usage_percent || 0}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-sm mb-2">
-                          <span>Disk Usage</span>
-                          <span>{stats?.disk_usage_percent || 0}%</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-primary h-2 rounded-full"
-                            style={{ width: `${stats?.disk_usage_percent || 0}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <MetricCard
-                    title="Error Rate"
-                    value={`${performance?.error_rate_percent || 0}%`}
-                    description="System-wide error rate"
-                    icon={<AlertTriangle className="w-8 h-8" />}
-                    status={
-                      (performance?.error_rate_percent || 0) > 5 ? "error" :
-                      (performance?.error_rate_percent || 0) > 2 ? "warning" : "success"
-                    }
-                  />
-                  <MetricCard
-                    title="Requests (24h)"
-                    value={performance?.total_requests_24h || 0}
-                    description="Total API requests"
-                    icon={<Activity className="w-8 h-8" />}
-                  />
-                  <MetricCard
-                    title="Uptime"
-                    value={`${stats?.uptime_hours?.toFixed(1) || 0}h`}
-                    description="System uptime"
-                    icon={<Clock className="w-8 h-8" />}
-                    status="success"
-                  />
-                </div>
-              </TabsContent>
-
-              <TabsContent value="security" className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-                  <MetricCard
-                    title="Failed Logins"
-                    value={security?.failed_logins_24h || 0}
-                    description="Last 24 hours"
-                    icon={<Shield className="w-8 h-8" />}
-                    status={
-                      (security?.failed_logins_24h || 0) > 10 ? "error" :
-                      (security?.failed_logins_24h || 0) > 5 ? "warning" : "success"
-                    }
-                  />
-                  <MetricCard
-                    title="High Risk Events"
-                    value={security?.high_risk_events || 0}
-                    description="Security incidents"
-                    icon={<AlertTriangle className="w-8 h-8" />}
-                    status={
-                      (security?.high_risk_events || 0) > 0 ? "error" : "success"
-                    }
-                  />
-                  <MetricCard
-                    title="Active Sessions"
-                    value={security?.active_sessions || 0}
-                    description="Current user sessions"
-                    icon={<Users className="w-8 h-8" />}
-                  />
-                  <MetricCard
-                    title="Audit Logs"
-                    value={security?.total_audit_logs || 0}
-                    description="Total logged events"
-                    icon={<FileText className="w-8 h-8" />}
-                  />
-                </div>
-
-                {/* Recent Admin Actions */}
-                <Card className="shadow-elegant">
-                  <CardHeader>
-                    <CardTitle>Recent Admin Actions</CardTitle>
-                    <CardDescription>
-                      Latest administrative activities and security events
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {security?.recent_admin_actions?.slice(0, 10).map((action) => (
-                        <div
-                          key={action.id}
-                          className="flex items-center justify-between p-4 border border-border rounded-lg"
-                        >
-                          <div className="flex items-center space-x-4">
-                            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                              <Shield className="w-5 h-5 text-red-600" />
-                            </div>
-                            <div>
-                              <p className="font-medium">{action.description}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {action.user_email} - {action.action}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <Badge variant={action.risk_level === "high" ? "destructive" : "secondary"}>
-                              {action.risk_level}
-                            </Badge>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {new Date(action.timestamp).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                      )) || (
-                        <p className="text-center text-muted-foreground py-8">
-                          No recent admin actions to display
-                        </p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
 
               <TabsContent value="usage" className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -698,6 +524,10 @@ const Analytics = () => {
                     </div>
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              <TabsContent value="chat" className="space-y-6">
+                <ChatAIAnalytics />
               </TabsContent>
             </Tabs>
           </>

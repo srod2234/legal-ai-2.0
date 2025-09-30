@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import { useChat } from "@/hooks/useChat";
 import {
   Sidebar,
@@ -62,7 +63,8 @@ const AppSidebar = () => {
   const { toast } = useToast();
   const [sessionToDelete, setSessionToDelete] = useState<number | null>(null);
 
-  // Get actual chat sessions
+  // Get user auth info and chat sessions
+  const { isAdmin, logout, isLoggingOut } = useAuth();
   const { sessions, createSession, isCreatingSession, refetchSessions, deleteSession, isDeletingSession } = useChat();
 
   const isActive = (path: string) => currentPath === path;
@@ -207,6 +209,21 @@ const AppSidebar = () => {
     }
   };
 
+  // Handle logout
+  const handleLogout = async () => {
+    try {
+      // Call logout API first - storage clearing is handled in useAuth hook
+      await logout();
+    } catch (error) {
+      console.error('Logout failed:', error);
+      // If logout API fails, still clear auth storage and redirect
+      const authKeysToRemove = ['currentChatSessionId'];
+      authKeysToRemove.forEach(key => localStorage.removeItem(key));
+      sessionStorage.clear();
+      window.location.href = '/login';
+    }
+  };
+
   return (
     <Sidebar 
       className={`${collapsed ? "w-14" : "w-80"} border-r border-sidebar-border bg-sidebar transition-all duration-300`}
@@ -295,22 +312,27 @@ const AppSidebar = () => {
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <NavLink to="/admin" className={getNavCls(isActive("/admin"))}>
-                    <Shield className="w-4 h-4" />
-                    {!collapsed && <span>Admin</span>}
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <NavLink to="/admin/analytics" className={getNavCls(isActive("/admin/analytics"))}>
-                    <BarChart3 className="w-4 h-4" />
-                    {!collapsed && <span>Analytics</span>}
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {/* Admin-only navigation items */}
+              {isAdmin && (
+                <>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <NavLink to="/admin" className={getNavCls(isActive("/admin"))}>
+                        <Shield className="w-4 h-4" />
+                        {!collapsed && <span>Admin</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <NavLink to="/admin/analytics" className={getNavCls(isActive("/admin/analytics"))}>
+                        <BarChart3 className="w-4 h-4" />
+                        {!collapsed && <span>Analytics</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -333,10 +355,10 @@ const AppSidebar = () => {
                         onClick={() => handleChatClick(session.id)}
                         className="p-3 rounded-lg hover:bg-sidebar-accent/50 cursor-pointer transition-smooth group relative"
                       >
-                        <div className="flex items-start space-x-3">
-                          <div className="flex-shrink-0 flex flex-col items-center mt-1">
+                        <div className="flex items-center space-x-3">
+                          <div className="flex-shrink-0">
                             {/* Chat type icon */}
-                            <div className={`w-6 h-6 rounded flex items-center justify-center mb-1 ${
+                            <div className={`w-6 h-6 rounded flex items-center justify-center ${
                               session.session_type === 'document' || session.document_id
                                 ? 'bg-blue-100 text-blue-600'
                                 : 'bg-gray-100 text-gray-600'
@@ -347,10 +369,6 @@ const AppSidebar = () => {
                                 <MessageSquare className="w-3 h-3" />
                               )}
                             </div>
-                            {/* Status dot */}
-                            <div className={`w-2 h-2 rounded-full ${
-                              session.message_count > 0 ? 'bg-primary' : 'bg-sidebar-foreground/30'
-                            }`} />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center space-x-2 mb-1">
@@ -363,15 +381,6 @@ const AppSidebar = () => {
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-sidebar-foreground/70 truncate mt-1">
-                              {session.message_count === 0
-                                ? 'No messages yet'
-                                : `${session.message_count} message${session.message_count === 1 ? '' : 's'}`
-                              }
-                            </p>
-                            <p className="text-xs text-sidebar-foreground/50 mt-2">
-                              {formatTimeAgo(session.created_at)}
-                            </p>
                           </div>
                           {/* Delete button - only visible on hover */}
                           <Button
@@ -409,9 +418,13 @@ const AppSidebar = () => {
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <button className="w-full text-sidebar-foreground hover:bg-sidebar-accent/50 transition-smooth">
+              <button
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className="w-full text-sidebar-foreground hover:bg-sidebar-accent/50 transition-smooth disabled:opacity-50"
+              >
                 <LogOut className="w-4 h-4" />
-                {!collapsed && <span>Sign Out</span>}
+                {!collapsed && <span>{isLoggingOut ? 'Signing Out...' : 'Sign Out'}</span>}
               </button>
             </SidebarMenuButton>
           </SidebarMenuItem>

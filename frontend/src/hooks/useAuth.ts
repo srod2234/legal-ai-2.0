@@ -1,10 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService, LoginRequest, User } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
+import { useState, useEffect } from 'react';
 
 export const useAuth = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Get current user query - uses HTTP-only cookies for authentication
   const {
@@ -22,6 +24,7 @@ export const useAuth = () => {
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnMount: true,
     refetchOnWindowFocus: false,
+    enabled: !isLoggingOut, // Disable query during logout
     onSuccess: (userData) => {
       console.log('✅ useAuth: Successfully authenticated user:', userData?.email);
     },
@@ -30,12 +33,10 @@ export const useAuth = () => {
     },
   });
 
-  console.log('🔐 useAuth: Hook state', {
-    isAuthenticated: !!user,
-    userEmail: user?.email,
-    isLoading,
-    hasError: !!error
-  });
+  // Reduced logging to prevent infinite loops
+  if (isLoading) {
+    console.log('🔐 useAuth: Loading...');
+  }
 
 
   // Login mutation
@@ -59,19 +60,39 @@ export const useAuth = () => {
 
   // Logout mutation
   const logoutMutation = useMutation({
-    mutationFn: apiService.logout,
+    mutationFn: async () => {
+      setIsLoggingOut(true);
+      // Call logout API - don't clear anything until after success
+      return apiService.logout();
+    },
     onSuccess: () => {
-      // Clear all React Query data
-      queryClient.clear();
-      toast({
-        title: 'Success',
-        description: 'Successfully logged out',
-      });
+      // Clear only auth-related items from localStorage, preserve chat data
+      const authKeysToRemove = ['currentChatSessionId'];
+      authKeysToRemove.forEach(key => localStorage.removeItem(key));
+
+      // Clear all sessionStorage (temporary session data)
+      sessionStorage.clear();
+
+      // Clear auth-related React Query data
+      queryClient.setQueryData(['currentUser'], null);
+      queryClient.removeQueries(['currentUser']);
+      queryClient.invalidateQueries(['currentUser']);
+
+      // Force a hard redirect with page reload
+      window.location.replace('/login');
     },
     onError: (error: Error) => {
       console.error('Logout error:', error);
-      // Clear cache anyway
-      queryClient.clear();
+      // Clear only auth-related items even on error
+      const authKeysToRemove = ['currentChatSessionId'];
+      authKeysToRemove.forEach(key => localStorage.removeItem(key));
+      sessionStorage.clear();
+
+      queryClient.setQueryData(['currentUser'], null);
+      queryClient.removeQueries(['currentUser']);
+      queryClient.invalidateQueries(['currentUser']);
+      setIsLoggingOut(false);
+      window.location.replace('/login');
     },
   });
 
@@ -91,16 +112,16 @@ export const useAuth = () => {
   };
 
   return {
-    user,
-    isLoading,
+    user: isLoggingOut ? null : user, // Return null user during logout
+    isLoading: isLoggingOut ? false : isLoading,
     isError,
     error,
-    isAuthenticated: !!user,
-    isAdmin: user?.role === 'admin',
+    isAuthenticated: !!user && !isLoggingOut,
+    isAdmin: user?.role === 'admin' && !isLoggingOut,
     login: loginMutation.mutateAsync,
     logout: logoutMutation.mutateAsync,
     isLoggingIn: loginMutation.isPending,
-    isLoggingOut: logoutMutation.isPending,
+    isLoggingOut: logoutMutation.isPending || isLoggingOut,
     verifyToken,
   };
 };

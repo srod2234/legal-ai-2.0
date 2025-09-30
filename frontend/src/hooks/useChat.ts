@@ -511,7 +511,7 @@ export const useChat = (sessionId?: number) => {
   useEffect(() => {
     if (!sessionId) {
       // Default welcome message for new chats
-      setMessagesWithPersistence([{
+      setMessages([{
         id: '1',
         type: 'assistant',
         content: 'Welcome to Legal AI System! I can help you analyze legal documents and answer questions about them. Upload a document to get started, or ask me anything about legal matters.',
@@ -539,9 +539,11 @@ export const useChat = (sessionId?: number) => {
     // Fall back to session messages from React Query if no localStorage data
     if (sessionMessages.length > 0) {
       console.log('Loading messages from React Query for session:', sessionId);
-      setMessagesWithPersistence(sessionMessages);
+      setMessages(sessionMessages);
+      // Manually save to localStorage since we're not using setMessagesWithPersistence
+      saveMessagesToStorage(sessionId, sessionMessages);
     }
-  }, [sessionMessages, sessionId]);
+  }, [sessionId]); // Removed sessionMessages from dependency array to prevent infinite loop
 
   // Effect to handle sessionId changes and load persisted messages
   useEffect(() => {

@@ -11,13 +11,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Activity,
-  Users,
-  FileText,
-  MessageSquare,
   TrendingUp,
   Shield,
   Server,
-  DollarSign,
   AlertTriangle,
   Clock,
   Database,
@@ -131,12 +127,6 @@ const DashboardOverview: React.FC = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const formatCurrency = (amount: number): string => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount);
-  };
 
   return (
     <div className="space-y-6">
@@ -160,66 +150,6 @@ const DashboardOverview: React.FC = () => {
         </div>
       </div>
 
-      {/* Key Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Users */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.total_users || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats?.active_users || 0} active • {stats?.new_users_today || 0} new today
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Documents */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Documents</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.total_documents || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              {formatBytes((stats?.total_file_size_gb || 0) * 1024 * 1024 * 1024)} total
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Chat Sessions */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Chat Sessions</CardTitle>
-            <MessageSquare className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.total_chat_sessions || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats?.messages_today || 0} messages today
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* AI Costs */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">AI Costs</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {formatCurrency(stats?.estimated_cost_total || 0)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {formatCurrency(stats?.estimated_cost_today || 0)} today
-            </p>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* System Health and Performance */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -1,15 +1,5 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { Button } from "@/components/ui/button";
 import AppSidebar from "./AppSidebar";
-import { Bell, Settings, User, LogOut } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 
 interface AppLayoutProps {
@@ -17,19 +7,7 @@ interface AppLayoutProps {
 }
 
 const AppLayout = ({ children }: AppLayoutProps) => {
-  const navigate = useNavigate();
-  const { user, logout, isAdmin } = useAuth();
-
-  const handleSignOut = async () => {
-    try {
-      await logout();
-      navigate("/login");
-    } catch (error) {
-      console.error('Logout error:', error);
-      // Navigate anyway in case of error
-      navigate("/login");
-    }
-  };
+  const { user } = useAuth();
 
   return (
     <SidebarProvider>
@@ -46,55 +24,6 @@ const AppLayout = ({ children }: AppLayoutProps) => {
               </div>
             </div>
 
-            <div className="flex items-center space-x-2">
-              {/* Notifications */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="hover:bg-accent-hover transition-smooth"
-              >
-                <Bell className="w-4 h-4" />
-              </Button>
-
-              {/* User Menu */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="hover:bg-accent-hover transition-smooth"
-                  >
-                    <User className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem
-                    onClick={() => navigate("/profile")}
-                    className="cursor-pointer"
-                  >
-                    <User className="w-4 h-4 mr-2" />
-                    Profile Settings
-                  </DropdownMenuItem>
-                  {isAdmin && (
-                    <DropdownMenuItem
-                      onClick={() => navigate("/admin")}
-                      className="cursor-pointer"
-                    >
-                      <Settings className="w-4 h-4 mr-2" />
-                      Admin Panel
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={handleSignOut}
-                    className="cursor-pointer text-destructive focus:text-destructive"
-                  >
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Sign Out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
           </header>
 
           {/* Main Content */}
