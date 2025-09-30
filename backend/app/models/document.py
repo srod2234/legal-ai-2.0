@@ -87,6 +87,50 @@ class Document(SQLModel, table=True):
     retention_date: Optional[datetime] = SQLField(default=None)
     legal_hold: bool = SQLField(default=False)
 
+    # ===== LEGAL 3.0 ADDITIONS =====
+
+    # Firm relationship (multi-tenancy)
+    firm_id: Optional[int] = SQLField(default=None, foreign_key="firm.id", index=True)
+
+    # Risk analysis fields
+    risk_score: Optional[float] = SQLField(default=None, index=True)  # 0-10 scale
+    risk_level: Optional[str] = SQLField(default=None, max_length=20)  # low, medium, high, critical
+    has_high_risk_clauses: bool = SQLField(default=False, index=True)
+
+    # Case law connections
+    precedent_count: int = SQLField(default=0)
+    relevant_cases_analyzed: int = SQLField(default=0)
+
+    # Analysis metadata
+    last_risk_analysis: Optional[datetime] = SQLField(default=None)
+    last_precedent_search: Optional[datetime] = SQLField(default=None)
+    analysis_completeness: Optional[float] = SQLField(default=None)  # 0-1 scale
+
+    # Practice area classification
+    practice_area: Optional[str] = SQLField(default=None, max_length=50, index=True)
+    contract_type: Optional[str] = SQLField(default=None, max_length=100)
+    parties_involved: Optional[str] = SQLField(default=None)  # JSON array
+
+    # Jurisdiction
+    jurisdiction: Optional[str] = SQLField(default=None, max_length=100)
+    governing_law: Optional[str] = SQLField(default=None, max_length=200)
+
+    # Financial impact
+    contract_value: Optional[float] = SQLField(default=None)
+    estimated_exposure: Optional[float] = SQLField(default=None)
+
+    # Workflow and status
+    requires_attorney_review: bool = SQLField(default=False)
+    attorney_reviewed: bool = SQLField(default=False)
+    attorney_review_date: Optional[datetime] = SQLField(default=None)
+    attorney_id: Optional[int] = SQLField(default=None)
+
+    # AI processing flags
+    clause_extraction_complete: bool = SQLField(default=False)
+    risk_analysis_complete: bool = SQLField(default=False)
+    precedent_research_complete: bool = SQLField(default=False)
+    predictions_generated: bool = SQLField(default=False)
+
 
 # Pydantic schemas for API requests/responses
 
