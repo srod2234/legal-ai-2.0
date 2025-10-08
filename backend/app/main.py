@@ -130,11 +130,17 @@ if settings.debug:
 
 # Include API routers
 from app.api import auth, documents, chat, admin
+from app.api import risk_assessment, case_research, firms, analytics
 
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(documents.router, prefix="/api/documents", tags=["documents"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+# LEGAL 3.0 Enterprise API Routes
+app.include_router(risk_assessment.router, tags=["risk-assessment"])
+app.include_router(case_research.router, tags=["case-research"])
+app.include_router(firms.router, tags=["firms"])
+app.include_router(analytics.router, tags=["analytics"])
 # app.include_router(users_router, prefix="/api/users", tags=["users"])
 
 

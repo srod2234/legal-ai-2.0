@@ -24,7 +24,7 @@ export interface User {
   id: number;
   email: string;
   full_name?: string;
-  role: 'admin' | 'standard';
+  role: 'admin' | 'standard' | 'partner' | 'senior_associate' | 'associate' | 'paralegal' | 'firm_admin' | 'analyst';
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -35,6 +35,13 @@ export interface User {
   language?: string;
   theme?: string;
   last_login?: string;
+  // LEGAL 3.0 additions
+  firm_id?: number;
+  firm_name?: string;
+  permissions?: string;
+  practice_areas?: string;
+  bar_number?: string;
+  bar_state?: string;
 }
 
 export interface UserCreate {
@@ -445,6 +452,11 @@ class ApiService {
     return response.documents;
   }
 
+  async getDocument(documentId: number): Promise<Document> {
+    const response = await this.request<{ document: Document }>(`/api/documents/${documentId}`);
+    return response.document;
+  }
+
   async getAdminDocuments(): Promise<Document[]> {
     return this.request<Document[]>('/api/admin/documents');
   }
@@ -673,6 +685,228 @@ class ApiService {
     }
 
     return response.blob();
+  }
+
+  // ==================== LEGAL 3.0 API METHODS ====================
+
+  // Risk Assessment methods
+  async analyzeDocumentRisk(documentId: number, options?: {
+    include_precedents?: boolean;
+    force_reanalysis?: boolean;
+  }): Promise<any> {
+    return this.request(`/api/risk/${documentId}/analyze`, {
+      method: 'POST',
+      body: JSON.stringify(options || {}),
+    });
+  }
+
+  async getRiskAssessment(documentId: number): Promise<any> {
+    return this.request(`/api/risk/${documentId}/assessment`);
+  }
+
+  async getDocumentClauses(documentId: number, filters?: {
+    risk_level?: string;
+    clause_type?: string;
+  }): Promise<any> {
+    const searchParams = new URLSearchParams();
+    if (filters?.risk_level) searchParams.append('risk_level', filters.risk_level);
+    if (filters?.clause_type) searchParams.append('clause_type', filters.clause_type);
+    const query = searchParams.toString();
+    return this.request(`/api/risk/${documentId}/clauses${query ? `?${query}` : ''}`);
+  }
+
+  async getRiskRecommendations(documentId: number): Promise<any> {
+    return this.request(`/api/risk/${documentId}/recommendations`);
+  }
+
+  async getRiskSummary(documentId: number): Promise<any> {
+    return this.request(`/api/risk/${documentId}/summary`);
+  }
+
+  async reanalyzeDocument(documentId: number): Promise<any> {
+    return this.request(`/api/risk/${documentId}/reanalyze`, {
+      method: 'POST',
+    });
+  }
+
+  // Case Research methods
+  async searchCases(params: {
+    query: string;
+    practice_area?: string;
+    jurisdiction?: string;
+    date_from?: string;
+    date_to?: string;
+    limit?: number;
+  }): Promise<any> {
+    const searchParams = new URLSearchParams();
+    searchParams.append('query', params.query);
+    if (params.practice_area) searchParams.append('practice_area', params.practice_area);
+    if (params.jurisdiction) searchParams.append('jurisdiction', params.jurisdiction);
+    if (params.date_from) searchParams.append('date_from', params.date_from);
+    if (params.date_to) searchParams.append('date_to', params.date_to);
+    if (params.limit) searchParams.append('limit', params.limit.toString());
+
+    return this.request(`/api/cases/search?${searchParams.toString()}`);
+  }
+
+  async getCaseDetails(caseId: string): Promise<any> {
+    return this.request(`/api/cases/${caseId}`);
+  }
+
+  async getDocumentPrecedents(documentId: number): Promise<any> {
+    return this.request(`/api/cases/precedents/${documentId}`);
+  }
+
+  async findRelevantCases(data: {
+    document_id: number;
+    legal_issue: string;
+    practice_area?: string;
+    jurisdiction?: string;
+  }): Promise<any> {
+    return this.request(`/api/cases/relevant`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getCaseAnalytics(filters?: {
+    practice_area?: string;
+    jurisdiction?: string;
+    date_from?: string;
+    date_to?: string;
+  }): Promise<any> {
+    const searchParams = new URLSearchParams();
+    if (filters?.practice_area) searchParams.append('practice_area', filters.practice_area);
+    if (filters?.jurisdiction) searchParams.append('jurisdiction', filters.jurisdiction);
+    if (filters?.date_from) searchParams.append('date_from', filters.date_from);
+    if (filters?.date_to) searchParams.append('date_to', filters.date_to);
+    const query = searchParams.toString();
+    return this.request(`/api/cases/analytics/outcomes${query ? `?${query}` : ''}`);
+  }
+
+  async getSavedCases(userId?: number): Promise<any> {
+    const searchParams = new URLSearchParams();
+    if (userId) searchParams.append('user_id', userId.toString());
+    const query = searchParams.toString();
+    return this.request(`/api/cases/saved${query ? `?${query}` : ''}`);
+  }
+
+  // Predictive Analytics methods
+  async predictOutcome(data: {
+    document_id: number;
+    practice_area: string;
+    case_type?: string;
+    jurisdiction?: string;
+  }): Promise<any> {
+    return this.request(`/api/analytics/predict-outcome`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async estimateSettlement(data: {
+    document_id: number;
+    practice_area: string;
+    claim_amount?: number;
+    case_type?: string;
+  }): Promise<any> {
+    return this.request(`/api/analytics/estimate-settlement`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async predictTimeline(data: {
+    practice_area: string;
+    case_stage: string;
+    case_type?: string;
+    jurisdiction?: string;
+  }): Promise<any> {
+    return this.request(`/api/analytics/predict-timeline`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async analyzeCaseStrength(data: {
+    document_id: number;
+    practice_area: string;
+    plaintiff_perspective: boolean;
+  }): Promise<any> {
+    return this.request(`/api/analytics/analyze-strength`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getFullAnalysis(documentId: number): Promise<any> {
+    return this.request(`/api/analytics/document/${documentId}/full-analysis`);
+  }
+
+  async getPracticeAreas(): Promise<any> {
+    return this.request(`/api/analytics/practice-areas`);
+  }
+
+  async getCaseStages(): Promise<any> {
+    return this.request(`/api/analytics/case-stages`);
+  }
+
+  // Firm Management methods
+  async createFirm(data: {
+    name: string;
+    firm_code: string;
+    subscription_tier?: string;
+    max_users?: number;
+    max_documents?: number;
+  }): Promise<any> {
+    return this.request(`/api/firms/`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getFirm(firmId: number): Promise<any> {
+    return this.request(`/api/firms/${firmId}`);
+  }
+
+  async updateFirm(firmId: number, data: any): Promise<any> {
+    return this.request(`/api/firms/${firmId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getFirmUsers(firmId: number): Promise<any> {
+    return this.request(`/api/firms/${firmId}/users`);
+  }
+
+  async addFirmUser(firmId: number, userId: number): Promise<any> {
+    return this.request(`/api/firms/${firmId}/users`, {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId }),
+    });
+  }
+
+  async removeFirmUser(firmId: number, userId: number): Promise<any> {
+    return this.request(`/api/firms/${firmId}/users/${userId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getFirmStatistics(firmId: number): Promise<any> {
+    return this.request(`/api/firms/${firmId}/statistics`);
+  }
+
+  async checkFirmLimits(firmId: number): Promise<any> {
+    return this.request(`/api/firms/${firmId}/limits`);
+  }
+
+  async listFirms(): Promise<any> {
+    return this.request(`/api/firms/`);
+  }
+
+  async getFirmByCode(firmCode: string): Promise<any> {
+    return this.request(`/api/firms/code/${firmCode}`);
   }
 }
 

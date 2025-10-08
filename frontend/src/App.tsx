@@ -5,7 +5,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Index from "./pages/Index";
+import Dashboard from "./pages/Dashboard";
 import Documents from "./pages/Documents";
+import ContractAnalysis from "./pages/ContractAnalysis";
+import RiskAssessment from "./pages/RiskAssessment";
+import CaseResearch from "./pages/CaseResearch";
+import PredictiveAnalytics from "./pages/PredictiveAnalytics";
+import PersonalInjury from "./pages/practice/PersonalInjury";
 import Admin from "./pages/Admin";
 import Analytics from "./pages/Analytics";
 import Profile from "./pages/Profile";
@@ -95,9 +101,44 @@ const App = () => (
               <Index />
             </ProtectedRoute>
           } />
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          } />
           <Route path="/documents" element={
             <ProtectedRoute>
               <Documents />
+            </ProtectedRoute>
+          } />
+          <Route path="/documents/:id/analysis" element={
+            <ProtectedRoute>
+              <ContractAnalysis />
+            </ProtectedRoute>
+          } />
+          <Route path="/risk-assessment" element={
+            <ProtectedRoute>
+              <RiskAssessment />
+            </ProtectedRoute>
+          } />
+          <Route path="/case-research" element={
+            <ProtectedRoute>
+              <CaseResearch />
+            </ProtectedRoute>
+          } />
+          <Route path="/predictive-analytics" element={
+            <ProtectedRoute>
+              <PredictiveAnalytics />
+            </ProtectedRoute>
+          } />
+          <Route path="/practice/personal-injury" element={
+            <ProtectedRoute>
+              <PersonalInjury />
+            </ProtectedRoute>
+          } />
+          <Route path="/analytics" element={
+            <ProtectedRoute>
+              <Analytics />
             </ProtectedRoute>
           } />
           <Route path="/admin" element={

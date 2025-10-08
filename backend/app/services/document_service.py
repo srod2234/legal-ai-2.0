@@ -39,6 +39,9 @@ from app.services.vector_service import vector_service
 
 logger = logging.getLogger(__name__)
 
+# Import enhanced processing (lazy to avoid circular imports)
+_enhanced_processing_service = None
+
 
 class DocumentService:
     """Service for document processing and management."""
@@ -246,8 +249,13 @@ class DocumentService:
             document.processing_completed_at = datetime.utcnow()
             self.session.add(document)
             self.session.commit()
-            
+
             logger.info(f"Document processing completed: {document_id} - Status: {document.processing_status}")
+
+            # Trigger legal analysis if document is a contract or legal document
+            if document.document_type in [DocumentType.CONTRACT, DocumentType.LEGAL_BRIEF]:
+                logger.info(f"Starting legal analysis for document {document_id}")
+                asyncio.create_task(self._perform_legal_analysis(document_id, extracted_text))
             
         except Exception as e:
             logger.error(f"Error processing document {document_id}: {e}")
@@ -559,6 +567,49 @@ class DocumentService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Document deletion failed"
             )
+
+    async def _perform_legal_analysis(self, document_id: int, extracted_text: str):
+        """Perform enhanced legal analysis on document"""
+        global _enhanced_processing_service
+
+        try:
+            # Lazy load enhanced processing service
+            if _enhanced_processing_service is None:
+                from app.services.enhanced_document_processing import (
+                    get_enhanced_document_processing_service
+                )
+                _enhanced_processing_service = get_enhanced_document_processing_service(
+                    self.session
+                )
+
+            # Get document
+            document = self.session.get(Document, document_id)
+            if not document:
+                logger.error(f"Document {document_id} not found for legal analysis")
+                return
+
+            # Perform legal analysis
+            logger.info(f"Starting enhanced legal analysis for document {document_id}")
+            results = await _enhanced_processing_service.process_legal_document(
+                document,
+                extracted_text,
+                enable_precedent_search=True
+            )
+
+            if results.get("status") == "success":
+                logger.info(
+                    f"Legal analysis completed for document {document_id}: "
+                    f"Completeness={results.get('analysis_completeness', 0):.1%}, "
+                    f"Risk={results.get('risk_analysis', {}).get('overall_risk_score', 0)}"
+                )
+            else:
+                logger.error(
+                    f"Legal analysis failed for document {document_id}: "
+                    f"{results.get('error', 'Unknown error')}"
+                )
+
+        except Exception as e:
+            logger.error(f"Error performing legal analysis for document {document_id}: {e}")
 
 
 def get_document_service(session: Session = next(get_session())) -> DocumentService:

@@ -98,6 +98,7 @@ temp/
 # Backup files
 *.bak
 *.backup
+backups/
 
 # Jupyter Notebook
 .ipynb_checkpoints

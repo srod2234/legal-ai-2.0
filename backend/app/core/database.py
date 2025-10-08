@@ -38,11 +38,20 @@ def create_db_and_tables():
     try:
         # Import all models to ensure they're registered with SQLModel
         from app.models import user, document, chat, admin  # noqa: F401
-        
+
+        # Import LEGAL 3.0 models
+        from app.models import (
+            firm,
+            contract_clause,
+            case_precedent,
+            risk_assessment,
+            litigation_prediction
+        )  # noqa: F401
+
         logger.info("Creating database tables...")
         SQLModel.metadata.create_all(engine)
-        logger.info("Database tables created successfully")
-        
+        logger.info("Database tables created successfully (including LEGAL 3.0 models)")
+
     except Exception as e:
         logger.error(f"Error creating database tables: {e}")
         raise
@@ -141,16 +150,29 @@ def get_db_stats():
             from app.models.user import User
             from app.models.document import Document
             from app.models.chat import ChatSession, ChatMessage
-            
+
+            # Import LEGAL 3.0 models for stats
+            from app.models.firm import Firm
+            from app.models.contract_clause import ContractClause
+            from app.models.case_precedent import CasePrecedent
+            from app.models.risk_assessment import RiskAssessment
+            from app.models.litigation_prediction import LitigationPrediction
+
             stats = {
                 "users": session.query(User).count(),
                 "documents": session.query(Document).count(),
                 "chat_sessions": session.query(ChatSession).count(),
                 "chat_messages": session.query(ChatMessage).count(),
+                # LEGAL 3.0 stats
+                "firms": session.query(Firm).count(),
+                "contract_clauses": session.query(ContractClause).count(),
+                "case_precedents": session.query(CasePrecedent).count(),
+                "risk_assessments": session.query(RiskAssessment).count(),
+                "litigation_predictions": session.query(LitigationPrediction).count(),
             }
-            
+
             return stats
-            
+
     except Exception as e:
         logger.error(f"Error getting database stats: {e}")
         return {}
